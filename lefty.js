@@ -13,25 +13,40 @@ var whichSite = document.location.protocol + '//' + document.location.host;
 // This style works amazingly well.
 var marginRight = {'margin-right': '950px', 'margin-left': '5px'};
 
-var didIt = false;  // did we apply left?
+var undoIt;  // Function to undo the action.
 
+// Apply the default marginRight css to this element
+// Returns a function do undo the action.
 function applyCss(elem) {
-  elem.css(marginRight);
   var output = '';
+  var undoCss = {};
   for (var key in marginRight) {
     if (marginRight.hasOwnProperty(key)) {
       output += key + ': ' + marginRight[key] + '; ';
+      undoCss[key] = elem.css(key);
     }
   }
+  elem.css(marginRight);
   console.log('.css({' + output + '}); site: ' + whichSite);
+  return function() {
+    console.log('Reverting element to: ' + undoCss);
+    elem.css(undoCss);
+  };
 }
 
+// Apply a special css for google docs documents.
+// Returns a function do undo the action.
 function kixCss(elem) {
   for (i = 0; i < 3; i++) {
     elem = elem.children().first();
   }
+  var oldLeft = elem.css('left');
   elem.css({'left': 5});
   console.log('kix.css({left: 5}); site: ' + whichSite);
+  return function() {
+    console.log('Set left back to ' + oldLeft);
+    elem.css({'left': oldLeft});
+  };
 }
 
 var queries = [
@@ -92,7 +107,7 @@ function setStyle(style) {
 /**
  * Loop through the known queries that often work.
  */
-function loopKnown() {
+function loopKnownSites() {
   for (var query in queries) {
     if (queries.hasOwnProperty(query)) {
       var id = queries[query].q;
@@ -107,7 +122,7 @@ function loopKnown() {
           console.log('depth is: ' + depth + " for " + id);
         }
         var func = queries[query].func;
-        func(elem);
+        undoIt = func(elem);
         return true;
       }
     }
@@ -124,7 +139,12 @@ port.onMessage.addListener(
         console.log('Unknown setting: ' + msg.name);
       }
     } else if (msg.cmd == 'pong') {
-      loopKnown();
+      if (undoIt) {
+        undoIt();
+        undoIt = null;
+      } else {
+        loopKnownSites();
+      }
     } else {
       console.log('Unknown message: ' + msg.cmd);
     }
