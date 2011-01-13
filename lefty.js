@@ -11,18 +11,38 @@ var port = chrome.extension.connect({name: 'lefty'});
 var whichSite = document.location.protocol + '//' + document.location.host;
 
 // This style works amazingly well.
-var margin_right = {'margin-right': '950px', 'margin-left': '5px'};
+var marginRight = {'margin-right': '950px', 'margin-left': '5px'};
+
+var didIt = false;  // did we apply left?
+
+function applyCss(elem) {
+  elem.css(marginRight);
+  var output = '';
+  for (var key in marginRight) {
+    if (marginRight.hasOwnProperty(key)) {
+      output += key + ': ' + marginRight[key] + '; ';
+    }
+  }
+  console.log('.css({' + output + '}); site: ' + whichSite);
+}
+
+function kixCss(elem) {
+  for (i = 0; i < 3; i++) {
+    elem = elem.children().first();
+  }
+  elem.css({'left': 5});
+  console.log('kix.css({left: 5}); site: ' + whichSite);
+}
 
 var queries = [
-  '#gwtPanel center', // ex. orkut
-  '#kix-appview',  // docs
-  'body'  // This seems to work for 90% of the sites
-];
+  // ex. orkut
+  { 'q': '#gwtPanel center', 'maxDepth': 8, 'func': applyCss },
 
-var maxDepths = [
-  8,
-  5,
-  1
+  // docs
+  { 'q': '#kix-appview', 'maxDepth': 5, 'func': kixCss },
+
+  // This seems to work for 90% of the sites
+  { 'q': 'body', 'maxDepth': 1, 'func': applyCss }
 ];
 
 /**
@@ -47,22 +67,52 @@ function setStyle(style) {
     return;
   }
   var styles = style.split(';');
-  if (style.length == 0) {
+  if (style.length === 0) {
     console.log('Got 0 length array');
     return;
   }
-  margin_right = {};
+  marginRight = {};
   for (var i in styles) {
-    var keyval = styles[i].split(':');
-    if (keyval.length == 2) {
-      margin_right[trim(keyval[0])] = trim(keyval[1]);
+    if (styles.hasOwnProperty(i)) {
+      var keyval = styles[i].split(':');
+      if (keyval.length == 2) {
+        marginRight[trim(keyval[0])] = trim(keyval[1]);
+      }
     }
   }
   var output = 'margin_right = ';
-  for (key in margin_right) {
-    output += key + ': ' + margin_right[key] + '; ';
+  for (var key in marginRight) {
+    if (marginRight.hasOwnProperty(key)) {
+      output += key + ': ' + marginRight[key] + '; ';
+    }
   }
   console.log(output);
+}
+
+/**
+ * Loop through the known queries that often work.
+ */
+function loopKnown() {
+  for (var query in queries) {
+    if (queries.hasOwnProperty(query)) {
+      var id = queries[query].q;
+      var elem = $(id);
+      if (elem.length) {
+        var depth = elem.depth();
+        var maxDepth = queries[query].maxDepth;
+        if (depth > maxDepth) {
+          console.log('too deep, depth is: ' + depth + " for " + id);
+          continue;
+        } else {
+          console.log('depth is: ' + depth + " for " + id);
+        }
+        var func = queries[query].func;
+        func(elem);
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 port.onMessage.addListener(
@@ -75,42 +125,10 @@ port.onMessage.addListener(
       }
     } else if (msg.cmd == 'pong') {
       loopKnown();
-      if ($('.kix-documentview').length) {
-        // Special handling for docs document
-        $('.kix-documentview').css('left', '5px');
-        console.log('Kix special case');
-      }
     } else {
       console.log('Unknown message: ' + msg.cmd);
     }
   });
-
-/**
- * Loop through the known queries that often work.
- */
-function loopKnown() {
-  for (var query in queries) {
-    var id = queries[query];
-    var elem = $(id);
-    if (elem.length) {
-      var depth = elem.depth();
-      if (depth > maxDepths[query]) {
-        console.log('too deep, depth is: ' + depth + " for " + id);
-        continue;
-      } else {
-        console.log('depth is: ' + depth + " for " + id);
-      }
-      elem.css(margin_right);
-      var output = '';
-      for (key in margin_right) {
-        output += key + ': ' + margin_right[key] + '; ';
-      }
-      console.log('$(' + id + ').css({' + output + '}); site: ' + whichSite);
-      return true;
-    }
-  }
-  return false;
-}
 
 // Post a messages and wait for response
 port.postMessage({cmd: 'getSetting', name: 'style'});
